@@ -8,6 +8,7 @@ type Message = {
   content: string;
   sources?: { content: string; source: string }[];
   toolUsed?: string;
+  evaluation?: { faithfulness: number; relevancy: number; explanation: string };
 };
 
 export default function Home() {
@@ -175,7 +176,9 @@ export default function Home() {
       let accumulatedContent = "";
       let sources: any[] = [];
       let toolUsed = "";
+      let evaluation: any = null;
       let sourcesExtracted = false;
+      let evalExtracted = false;
 
       // Add initial AI placeholder
       setMessages(prev => [...prev, { role: "ai", content: "", sources: [] }]);
@@ -200,12 +203,22 @@ export default function Home() {
             accumulatedContent += chunk.substring(sepIndex + 9);
             sourcesExtracted = true;
           } else {
-            // Still waiting for sources or separator was split across chunks
-            // (Simplification: we assume first chunk or two contains the small JSON)
-             accumulatedContent += chunk; 
+            accumulatedContent += chunk; 
           }
         } else {
-          accumulatedContent += chunk;
+          // Check for eval separator
+          const evalIndex = chunk.indexOf("\n--EVAL--\n");
+          if (evalIndex !== -1) {
+            const evalJSON = chunk.substring(evalIndex + 10);
+            try {
+              evaluation = JSON.parse(evalJSON);
+            } catch (e) {}
+            
+            accumulatedContent += chunk.substring(0, evalIndex);
+            evalExtracted = true;
+          } else {
+            accumulatedContent += chunk;
+          }
         }
 
         // Update the last message (AI response)
@@ -216,7 +229,8 @@ export default function Home() {
             ...newMessages[lastIdx], 
             content: accumulatedContent,
             sources: sources,
-            toolUsed: toolUsed
+            toolUsed: toolUsed,
+            evaluation: evaluation
           };
           return newMessages;
         });
@@ -358,6 +372,17 @@ export default function Home() {
                     textTransform: "uppercase"
                   }}>
                     <span style={{ fontSize: "0.9rem" }}>🛠️</span> {msg.toolUsed}
+                    
+                    {msg.evaluation && (
+                      <>
+                        <span style={{ margin: "0 4px", opacity: 0.3 }}>|</span>
+                        <span style={{ 
+                          color: msg.evaluation.faithfulness > 0.8 ? "#10b981" : "#f59e0b"
+                        }}>
+                          🛡️ {Math.round(msg.evaluation.faithfulness * 100)}% RELIABLE
+                        </span>
+                      </>
+                    )}
                   </div>
                 )}
                 

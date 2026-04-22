@@ -57,12 +57,23 @@ export async function POST(req: NextRequest) {
           // Stream the answer
           const chatStream = await streamWithFallback(null, message, context, history);
           
+          let fullAnswer = "";
           for await (const chunk of chatStream) {
+            fullAnswer += chunk;
             controller.enqueue(encoder.encode(chunk));
           }
           
+          // Step 4: Run Evaluation (Hallucination check)
+          console.log("📊 Running self-evaluation...");
+          const { evaluateAnswer } = await import("@/lib/rag/evaluator");
+          const evaluation = await evaluateAnswer(standaloneQuestion, fullAnswer, context);
+          
+          // Send evaluation as final metadata
+          const finalData = "\n--EVAL--\n" + JSON.stringify(evaluation);
+          controller.enqueue(encoder.encode(finalData));
+          
           controller.close();
-          console.log(`✅ Stream finished in ${Date.now() - startTime}ms`);
+          console.log(`✅ Stream and Eval finished in ${Date.now() - startTime}ms`);
         } catch (err: any) {
           console.error("Stream Error:", err.message);
           const errorMsg = err.message?.includes("rate-limited") || err.message?.includes("429") || err.message?.includes("exhausted")
