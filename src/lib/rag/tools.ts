@@ -56,7 +56,15 @@ export async function runAgenticWorkflow(query: string) {
     let toolUsed = "None";
 
     // Enhanced matching logic
-    if (toolOutput.includes("search_documents") || query.toLowerCase().includes("file") || query.toLowerCase().includes("document")) {
+    const lowerQuery = query.toLowerCase();
+    if (
+      toolOutput.includes("search_documents") || 
+      lowerQuery.includes("file") || 
+      lowerQuery.includes("document") ||
+      lowerQuery.includes("pdf") ||
+      lowerQuery.includes("txt") ||
+      (lowerQuery.includes("what") && lowerQuery.includes("in"))
+    ) {
       context = await search_documents(query);
       toolUsed = "Document Search";
     } else if (toolOutput.includes("wikipedia_search")) {
