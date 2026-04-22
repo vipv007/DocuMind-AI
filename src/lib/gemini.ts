@@ -108,11 +108,7 @@ async function* streamGroq(prompt: string): AsyncGenerator<string> {
   throw new Error("All Groq models failed to stream");
 }
 
-// ============================================================
-// GEMINI LLM — Fallback only (has rate limits on free tier)
-// ============================================================
-
-const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"];
+const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
 
 function getGeminiKey(): string | undefined {
   return process.env.GOOGLE_API_KEY;
@@ -121,13 +117,13 @@ function getGeminiKey(): string | undefined {
 // Default export for non-streaming uses (upload check, etc.)
 export const llm = new ChatGoogleGenerativeAI({
   apiKey: process.env.GOOGLE_API_KEY,
-  modelName: "gemini-2.0-flash-lite",
+  modelName: "gemini-1.5-flash", // Use 1.5 flash as it's more stable
   temperature: 0.1,
 });
 
-// ============================================================
-// SMART STREAM — Groq first (free), Gemini as fallback
-// ============================================================
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
 
 /**
  * Generates a standalone question based on chat history.
@@ -139,18 +135,21 @@ export async function getStandaloneQuestion(
   if (!history || history.length === 0) return message;
 
   const historyText = history
-    .slice(-5) // Use last 5 messages for context
+    .slice(-5)
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join("\n");
 
-  const prompt = `Convert the follow-up question into a standalone search query. Return ONLY the query.
+  const prompt = `Based on this chat history, convert the follow-up question into a standalone question.
   
-  HISTORY: ${historyText}
+  HISTORY:
+  ${historyText}
+  
   FOLLOW-UP: ${message}
-  QUERY:`;
+  
+  Return ONLY the standalone question text.`;
 
   try {
-    // Force Groq for sub-second speed
+    // Using Groq for internal logic to save Gemini quota
     const res = await callGroq(prompt);
     return res.trim();
   } catch (error) {

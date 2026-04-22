@@ -48,23 +48,31 @@ export async function runAgenticWorkflow(query: string) {
   Return ONLY the tool name.`;
 
   try {
-    const { callGroq } = await import("../gemini");
-    const decision = await callGroq(decisionPrompt);
+    const { llm } = await import("../gemini");
+    const { StringOutputParser } = await import("@langchain/core/output_parsers");
+    
+    const decision = await llm.pipe(new StringOutputParser()).invoke(decisionPrompt);
     const toolOutput = decision.toLowerCase().trim();
 
     let context = "";
     let toolUsed = "None";
 
-    // Enhanced matching logic
+    // AGGRESSIVE OVERRIDE: If the user mentions PDF, File, Document or any common query keywords
     const lowerQuery = query.toLowerCase();
-    if (
+    const isDocQuery = 
       toolOutput.includes("search_documents") || 
+      lowerQuery.includes("pdf") || 
       lowerQuery.includes("file") || 
-      lowerQuery.includes("document") ||
-      lowerQuery.includes("pdf") ||
-      lowerQuery.includes("txt") ||
-      (lowerQuery.includes("what") && lowerQuery.includes("in"))
-    ) {
+      lowerQuery.includes("document") || 
+      lowerQuery.includes("venkatesh") || // Handling specific filenames from history
+      lowerQuery.includes("what") || 
+      lowerQuery.includes("who") || 
+      lowerQuery.includes("tell me") ||
+      lowerQuery.includes("ena tha") || 
+      lowerQuery.includes("iruku") ||
+      lowerQuery.includes("pathi"); // "about" in Tamil
+
+    if (isDocQuery) {
       context = await search_documents(query);
       toolUsed = "Document Search";
     } else if (toolOutput.includes("wikipedia_search")) {
@@ -74,7 +82,9 @@ export async function runAgenticWorkflow(query: string) {
 
     return { context, toolUsed };
   } catch (error) {
-    console.error("Agent decision failed:", error);
-    return { context: "", toolUsed: "Fallback (None)" };
+    // Default to document search on error instead of "None" to be safe
+    console.error("Agent decision failed, defaulting to Document Search:", error);
+    const context = await search_documents(query);
+    return { context, toolUsed: "Document Search (Auto)" };
   }
 }

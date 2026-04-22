@@ -28,35 +28,40 @@ export const rerankDocuments = async (
   docs: Document[],
   topK: number = 4
 ): Promise<Document[]> => {
-  // If we have very few docs, don't bother re-ranking
   if (docs.length <= topK) return docs;
 
-  // 1. Limit candidates to 10 for speed
-  const candidates = docs.slice(0, 10);
+  // 1. Retrieve top 15 candidates
+  const candidates = docs.slice(0, 15);
 
-  // 2. Prepare the documents
+  // 2. Prepare the documents for ranking
   const documentsFormatted = candidates
-    .map((doc, i) => `[${i}] ${doc.pageContent.slice(0, 500)}`) // Use snippets for speed
-    .join("\n");
+    .map((doc, i) => `ID: ${i}\nCONTENT: ${doc.pageContent}`)
+    .join("\n\n---\n\n");
 
   try {
-    const { callGroq } = await import("../gemini");
-    const prompt = `Which 4 document IDs are most relevant to: "${query}"?
+    const { llm } = await import("../gemini");
+    const { StringOutputParser } = await import("@langchain/core/output_parsers");
     
-    DOCS:
-    ${documentsFormatted}
-    
-    Return ONLY IDs like: 0, 2, 5, 1`;
+    const RERANK_PROMPT = `You are a Search Result Ranker. identify which documents are most relevant to: "${query}"
 
-    const result = await callGroq(prompt);
+DOCUMENTS:
+${documentsFormatted}
+
+Return ONLY the top ${topK} IDs separated by commas.
+Example: 2, 5, 1, 10`;
+
+    const chain = PromptTemplate.fromTemplate(RERANK_PROMPT).pipe(llm).pipe(new StringOutputParser());
+    const result = await chain.invoke({});
+
     const topIds = result
       .split(",")
-      .map((id) => parseInt(id.trim().replace(/[\[\]]/g, "")))
+      .map((id) => parseInt(id.trim()))
       .filter((id) => !isNaN(id) && id < candidates.length);
 
     const rerankedDocs = topIds.map((id) => candidates[id]);
     return rerankedDocs.length > 0 ? rerankedDocs.slice(0, topK) : docs.slice(0, topK);
   } catch (error) {
+    console.error("Re-ranking failed:", error);
     return docs.slice(0, topK);
   }
 };
