@@ -36,29 +36,30 @@ async function wikipedia_search(query: string) {
  */
 export async function runAgenticWorkflow(query: string) {
   // Simple prompt to help AI decide the tool
-  const decisionPrompt = `Task: Choose a tool for the question.
+  const decisionPrompt = `Task: Choose the best tool for the question.
   
   QUESTION: "${query}"
   
   TOOLS:
-  - search_documents: For specific documents, PDFs, or "uploaded" content.
-  - wikipedia_search: For general knowledge, famous people, history.
-  - no_tool: For greetings or casual talk.
+  - search_documents: Use this for ANY question about uploaded files, PDFs, or documents.
+  - wikipedia_search: Use this for general knowledge NOT in the files.
+  - no_tool: For greetings or casual chat.
   
-  RULE: Return ONLY the tool name.`;
+  Return ONLY the tool name.`;
 
   try {
     const { callGroq } = await import("../gemini");
     const decision = await callGroq(decisionPrompt);
-    const tool = decision.toLowerCase().trim();
+    const toolOutput = decision.toLowerCase().trim();
 
     let context = "";
     let toolUsed = "None";
 
-    if (tool.includes("search_documents")) {
+    // Enhanced matching logic
+    if (toolOutput.includes("search_documents") || query.toLowerCase().includes("file") || query.toLowerCase().includes("document")) {
       context = await search_documents(query);
       toolUsed = "Document Search";
-    } else if (tool.includes("wikipedia_search")) {
+    } else if (toolOutput.includes("wikipedia_search")) {
       context = await wikipedia_search(query);
       toolUsed = "Wikipedia";
     }
