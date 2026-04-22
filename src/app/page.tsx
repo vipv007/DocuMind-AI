@@ -7,6 +7,7 @@ type Message = {
   role: "user" | "ai";
   content: string;
   sources?: { content: string; source: string }[];
+  toolUsed?: string;
 };
 
 export default function Home() {
@@ -173,6 +174,7 @@ export default function Home() {
       const encoder = new TextDecoder();
       let accumulatedContent = "";
       let sources: any[] = [];
+      let toolUsed = "";
       let sourcesExtracted = false;
 
       // Add initial AI placeholder
@@ -192,6 +194,7 @@ export default function Home() {
             try {
               const parsed = JSON.parse(sourcesJSON);
               sources = parsed.sources;
+              toolUsed = parsed.toolUsed;
             } catch (e) {}
             
             accumulatedContent += chunk.substring(sepIndex + 9);
@@ -212,7 +215,8 @@ export default function Home() {
           newMessages[lastIdx] = { 
             ...newMessages[lastIdx], 
             content: accumulatedContent,
-            sources: sources 
+            sources: sources,
+            toolUsed: toolUsed
           };
           return newMessages;
         });
@@ -338,6 +342,24 @@ export default function Home() {
                 <div className="markdown-body">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
+                
+                {msg.toolUsed && msg.toolUsed !== "None" && (
+                  <div style={{ 
+                    fontSize: "0.7rem", 
+                    display: "inline-flex", 
+                    alignItems: "center", 
+                    gap: "4px", 
+                    padding: "2px 8px", 
+                    background: "rgba(124, 58, 237, 0.1)", 
+                    color: "var(--brand)", 
+                    borderRadius: "10px",
+                    marginBottom: "8px",
+                    fontWeight: 600,
+                    textTransform: "uppercase"
+                  }}>
+                    <span style={{ fontSize: "0.9rem" }}>🛠️</span> {msg.toolUsed}
+                  </div>
+                )}
                 
                 {msg.sources && msg.sources.length > 0 && (
                   <details className="sources-details">

@@ -24,36 +24,34 @@ export async function POST(req: NextRequest) {
     const standaloneQuestion = await getStandaloneQuestion(message, history);
     console.log("➡️ Standalone Question:", standaloneQuestion);
 
-    // Step 2: Retrieve context using standalone question
-    console.log("🔍 Retrieving context for:", standaloneQuestion);
-    const { retrieveContext } = await import("@/lib/rag/chain");
-    const sourcesDocs = await retrieveContext(standaloneQuestion);
+    // Step 2: Agentic Workflow (Decide tool + Retrieve)
+    console.log("🤖 Agent deciding workflow for:", standaloneQuestion);
+    const { runAgenticWorkflow } = await import("@/lib/rag/tools");
+    const { context, toolUsed } = await runAgenticWorkflow(standaloneQuestion);
     
-    if (!sourcesDocs || sourcesDocs.length === 0) {
-       console.log("⚠️ No relevant documents found.");
-       return NextResponse.json({ 
-         answer: "I couldn't find any information about that in your uploaded documents. Please make sure you've uploaded relevant files.",
-         sources: []
-       });
+    console.log(`🛠️ Tool Selected: ${toolUsed}`);
+
+    // Fallback if no context found but tool was used
+    if (toolUsed !== "None" && !context) {
+       console.log("⚠️ Tool returned no results.");
     }
 
     
-    const sources = sourcesDocs.map((doc: any) => ({
-      content: doc.pageContent,
-      source: doc.metadata.source || "Unknown Document",
-    }));
+    const sources = toolUsed === "Document Search" 
+      ? [{ content: context, source: "Uploaded Documents" }]
+      : toolUsed === "Wikipedia"
+        ? [{ content: context, source: "Wikipedia" }]
+        : [];
 
-    const context = formatDocumentsAsString(sourcesDocs);
-
-    // Step 2: Stream response — Groq first (free), Gemini fallback
+    // Step 3: Stream response
     console.log("🤖 Starting LLM stream...");
     
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // Send sources immediately
-          const initialData = JSON.stringify({ sources }) + "\n--SEP--\n";
+          // Send sources and tool info immediately
+          const initialData = JSON.stringify({ sources, toolUsed }) + "\n--SEP--\n";
           controller.enqueue(encoder.encode(initialData));
 
           // Stream the answer
