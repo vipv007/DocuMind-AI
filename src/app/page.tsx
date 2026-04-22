@@ -157,7 +157,10 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMsg }),
+        body: JSON.stringify({ 
+          message: userMsg,
+          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content }))
+        }),
       });
 
       if (!res.ok) {

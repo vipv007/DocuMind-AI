@@ -11,21 +11,26 @@ export async function POST(req: NextRequest) {
     console.log("💬 Chat API Request started...");
     
     const body = await req.json();
-    const { message } = body;
+    const { message, history = [] } = body;
 
     if (!message) {
       return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
 
-    const vectorStore = await getVectorStore();
+    const { getStandaloneQuestion, streamWithFallback } = await import("@/lib/gemini");
     
-    // Step 1: Retrieve context
-    console.log("🔍 Retrieving context for message:", message);
-    const retriever = vectorStore.asRetriever(4);
-    const sourcesDocs = await retriever.invoke(message);
+    // Step 1: Generate standalone question if history exists
+    console.log("🧠 Generating standalone question for:", message);
+    const standaloneQuestion = await getStandaloneQuestion(message, history);
+    console.log("➡️ Standalone Question:", standaloneQuestion);
+
+    // Step 2: Retrieve context using standalone question
+    console.log("🔍 Retrieving context for:", standaloneQuestion);
+    const { retrieveContext } = await import("@/lib/rag/chain");
+    const sourcesDocs = await retrieveContext(standaloneQuestion);
     
     if (!sourcesDocs || sourcesDocs.length === 0) {
-       console.log("⚠️ No relevant documents found in store.");
+       console.log("⚠️ No relevant documents found.");
        return NextResponse.json({ 
          answer: "I couldn't find any information about that in your uploaded documents. Please make sure you've uploaded relevant files.",
          sources: []
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
           controller.enqueue(encoder.encode(initialData));
 
           // Stream the answer
-          const chatStream = await streamWithFallback(null, message, context);
+          const chatStream = await streamWithFallback(null, message, context, history);
           
           for await (const chunk of chatStream) {
             controller.enqueue(encoder.encode(chunk));

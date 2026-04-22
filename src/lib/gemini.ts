@@ -129,7 +129,44 @@ export const llm = new ChatGoogleGenerativeAI({
 // SMART STREAM — Groq first (free), Gemini as fallback
 // ============================================================
 
-export async function streamWithFallback(_chain: any, input: string, context: string) {
+/**
+ * Generates a standalone question based on chat history.
+ */
+export async function getStandaloneQuestion(
+  message: string,
+  history: { role: string, content: string }[]
+): Promise<string> {
+  if (!history || history.length === 0) return message;
+
+  const historyText = history
+    .slice(-5) // Use last 5 messages for context
+    .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+    .join("\n");
+
+  const prompt = `Given the following conversation and a follow-up question, rephrase the follow-up question to be a standalone question that can be understood without context.
+  
+  CHAT HISTORY:
+  ${historyText}
+  
+  FOLLOW-UP QUESTION: ${message}
+  
+  Standalone Question:`;
+
+  try {
+    const res = await callGroq(prompt);
+    return res.trim();
+  } catch (error) {
+    console.warn("Standalone question generation failed, using original message:", error);
+    return message;
+  }
+}
+
+export async function streamWithFallback(_chain: any, input: string, context: string, history: { role: string, content: string }[] = []) {
+  // Build history string for the prompt
+  const historyText = history.length > 0 
+    ? "\nCHAT HISTORY:\n" + history.map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n") + "\n"
+    : "";
+
   // Build the full prompt
   const prompt = `You are DocuMind AI, a helpful and precise document assistant. 
 Your goal is to answer the user's question based ONLY on the provided context.
@@ -143,7 +180,7 @@ RULES:
 
 CONTEXT:
 ${context}
-
+${historyText}
 USER QUESTION:
 ${input}
 
