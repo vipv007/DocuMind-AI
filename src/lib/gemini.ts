@@ -143,20 +143,17 @@ export async function getStandaloneQuestion(
     .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
     .join("\n");
 
-  const prompt = `Given the following conversation and a follow-up question, rephrase the follow-up question to be a standalone question that can be understood without context.
+  const prompt = `Convert the follow-up question into a standalone search query. Return ONLY the query.
   
-  CHAT HISTORY:
-  ${historyText}
-  
-  FOLLOW-UP QUESTION: ${message}
-  
-  Standalone Question:`;
+  HISTORY: ${historyText}
+  FOLLOW-UP: ${message}
+  QUERY:`;
 
   try {
+    // Force Groq for sub-second speed
     const res = await callGroq(prompt);
     return res.trim();
   } catch (error) {
-    console.warn("Standalone question generation failed, using original message:", error);
     return message;
   }
 }

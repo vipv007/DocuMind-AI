@@ -36,23 +36,20 @@ async function wikipedia_search(query: string) {
  */
 export async function runAgenticWorkflow(query: string) {
   // Simple prompt to help AI decide the tool
-  const decisionPrompt = `You are a Tool Router. Decide which tool to use to answer the user's question.
+  const decisionPrompt = `Task: Choose a tool for the question.
   
   QUESTION: "${query}"
   
   TOOLS:
-  1. search_documents: Use this if the question is about specific documents, PDFs, or "uploaded" content.
-  2. wikipedia_search: Use this if the question is about general knowledge, famous people, history, or current events NOT likely in the documents.
-  3. no_tool: Use this if it's just a greeting (Hi/Hello) or doesn't need external info.
+  - search_documents: For specific documents, PDFs, or "uploaded" content.
+  - wikipedia_search: For general knowledge, famous people, history.
+  - no_tool: For greetings or casual talk.
   
-  Return ONLY the tool name. Nothing else.`;
+  RULE: Return ONLY the tool name.`;
 
-  // We'll use Gemini for the decision (fast and accurate)
-  const { llm } = await import("../gemini");
-  const { StringOutputParser } = await import("@langchain/core/output_parsers");
-  
   try {
-    const decision = await llm.pipe(new StringOutputParser()).invoke(decisionPrompt);
+    const { callGroq } = await import("../gemini");
+    const decision = await callGroq(decisionPrompt);
     const tool = decision.toLowerCase().trim();
 
     let context = "";

@@ -28,38 +28,35 @@ export const rerankDocuments = async (
   docs: Document[],
   topK: number = 4
 ): Promise<Document[]> => {
+  // If we have very few docs, don't bother re-ranking
   if (docs.length <= topK) return docs;
 
-  // 1. Prepare the documents with indices as IDs
-  const documentsFormatted = docs
-    .map((doc, i) => `ID: ${i}\nCONTENT: ${doc.pageContent}`)
-    .join("\n\n---\n\n");
+  // 1. Limit candidates to 10 for speed
+  const candidates = docs.slice(0, 10);
+
+  // 2. Prepare the documents
+  const documentsFormatted = candidates
+    .map((doc, i) => `[${i}] ${doc.pageContent.slice(0, 500)}`) // Use snippets for speed
+    .join("\n");
 
   try {
-    // 2. Ask Gemini to rank them
-    const chain = rerankTemplate.pipe(llm).pipe(new StringOutputParser());
-    const result = await chain.invoke({
-      question: query,
-      documents: documentsFormatted,
-      topK: topK,
-    });
+    const { callGroq } = await import("../gemini");
+    const prompt = `Which 4 document IDs are most relevant to: "${query}"?
+    
+    DOCS:
+    ${documentsFormatted}
+    
+    Return ONLY IDs like: 0, 2, 5, 1`;
 
-    // 3. Parse the IDs from the output (e.g., "2, 5, 1, 10")
+    const result = await callGroq(prompt);
     const topIds = result
       .split(",")
-      .map((id) => parseInt(id.trim()))
-      .filter((id) => !isNaN(id) && id < docs.length);
+      .map((id) => parseInt(id.trim().replace(/[\[\]]/g, "")))
+      .filter((id) => !isNaN(id) && id < candidates.length);
 
-    // 4. Return the selected documents in order of relevance
-    const rerankedDocs = topIds.map((id) => docs[id]);
-
-    // Fallback: If AI fails to return proper IDs, return first K
-    if (rerankedDocs.length === 0) return docs.slice(0, topK);
-
-    console.log(`🎯 Re-ranked: Selected ${rerankedDocs.length} chunks out of ${docs.length}`);
-    return rerankedDocs.slice(0, topK);
+    const rerankedDocs = topIds.map((id) => candidates[id]);
+    return rerankedDocs.length > 0 ? rerankedDocs.slice(0, topK) : docs.slice(0, topK);
   } catch (error) {
-    console.error("❌ Re-ranking failed:", error);
     return docs.slice(0, topK);
   }
 };
